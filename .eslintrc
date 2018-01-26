@@ -1,0 +1,12 @@
+{
+    "root": true,
+    "extends": "@hh.ru/eslint-config",
+    "parserOptions": {
+        "ecmaVersion": 7,
+        "sourceType": "module",
+        "ecmaFeatures": {
+            "jsx": true,
+            "classes": true
+        }
+    }
+}
