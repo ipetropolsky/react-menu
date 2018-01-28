@@ -3,53 +3,111 @@ import ReactDOM from 'react-dom';
 
 import './index.css';
 
-const { Component } = React;
+const { Component, PureComponent } = React;
 
-class Dropdown extends Component {
-    state = {
-        position: null,
-    };
-
-    calculatePosition() {
-        // some position calc code based on this.props.element
-        const position = {/* stub */top: 0, left: 0};
-
-        this.setState({
-            position,
-            active: true,
-        });
-    }
+class Dropdown extends PureComponent {
 
     render() {
-        const { children, onClose } = this.props;
-
-        this.calculatePosition();
+        const { items, rightPosition } = this.props;
 
         return (
-            <div className='dropdown'>
-                <button className='dropdown__close' onClick={onClose}></button>
-                {children}
+            <div
+                className='dropdown'
+                style={{
+                    right: rightPosition
+                }}
+            >
+                {
+                    items.map((menuItem) => (
+                        <DropdownItem
+                            key={menuItem.id}
+                            item={menuItem}
+                        >
+                            {menuItem.text}
+                        </DropdownItem>
+                    ))
+                }
             </div>
         );
     }
 }
 
-class Menu extends Component {
+function SomeLink({link, children, disabled, className, onClick}) {
+    const attrs = {
+        className: className || 'link',
+        // eslint-disable-next-line no-script-url
+        href: link || 'javascript:void(0);'
+    };
+    if (onClick) {
+        attrs.onClick = onClick;
+    };
+    if (disabled) {
+        attrs.tabIndex = -1;
+        attrs.disabled = true;
+    }
+    return (
+        <a {...attrs}>
+            {children}
+        </a>
+    );
+}
+
+class MenuItem extends Component {
+    componentWillUnmount() {
+        const { removeItemRef, id } = this.props;
+        removeItemRef && removeItemRef(id);
+    }
+
+    render() {
+        const { id, link, hidden, active, addItemRef, onClick, children } = this.props;
+        return (
+            <div
+                className={'menu-item' + (hidden ? ' menu-item_hidden' : '')}
+                data-menu-item-id={id}
+                ref={addItemRef}
+            >
+                <SomeLink
+                    link={link}
+                    disabled={hidden}
+                    className={'menu-item__link' + (active ? ' menu-item__link_active' : '')}
+                    onClick={onClick}
+                >
+                    {children}
+                </SomeLink>
+            </div>
+        )
+    }
+}
+
+function DropdownItem(props) {
+    return (
+        <div className="menu-item menu-item_wide">
+            <SomeLink
+                link={props.item.link}
+                className='menu-item__link'
+            >
+                {props.item.text}
+            </SomeLink>
+        </div>
+    )
+}
+
+class Menu extends PureComponent {
+    itemRefs = {};
+
     constructor(props, context) {
         super(props, context);
 
         this.state = {
-            dropdown: false,
-            menu: props.menu.items,
-            dropdownItemsCount: 0,
+            visibleItemsCount: props.items.length,
+            dropdownRightPosition: 0,
+            dropdownVisible: false
         };
     }
 
     componentDidMount() {
         window.addEventListener('resize', () => {
-            this.setState({
-                dropdownItemsCount: 0,
-            });
+            this.checkRecalculation();
         });
         this.checkRecalculation();
     }
@@ -59,89 +117,166 @@ class Menu extends Component {
     }
 
     checkRecalculation() {
-        const { dropdownItemsCount } = this.state;
-        Object.keys(this.refs).find((key) => {
-            if (this.refs[key].offsetTop > 0) {
-                this.setState({
-                    dropdownItemsCount: dropdownItemsCount + 1,
-                });
+        let visibleItemsWidth = 0;
+        let dropdownRightPosition = 0;
+        let visibleItemsCount = this.props.items.length;
+
+        const menuWidth = this.element.offsetWidth;
+        const moreLinkWidth = this.moreLink.offsetWidth;
+
+        this.props.items.findIndex((item, index) => {
+            const itemWidth = this.itemRefs[item.id].offsetWidth;
+            // Дополнительное место может понадобиться для кнопки дропдауна
+            let additionalWidth = (index === this.props.items.length - 1) ? 0 : moreLinkWidth;
+            if (visibleItemsWidth + itemWidth + additionalWidth > menuWidth) {
+                visibleItemsCount = index;
+                dropdownRightPosition = menuWidth - visibleItemsWidth - moreLinkWidth;
+                return true;
+            } else {
+                visibleItemsWidth += itemWidth;
             }
+            return false;
+        });
+
+        this.setState({
+            visibleItemsCount,
+            dropdownRightPosition,
         });
     }
 
-    render() {
-        const { dropdownItemsCount, menu, dropdown } = this.state;
+    hideDropdown = () => {
+        this.setState({
+            dropdownVisible: false
+        });
+    };
 
-        function SomeLink({link, children}) {
-            return (
-                <div>
-                    <a href={link} className='link'>
-                        {children}
-                    </a>
-                </div>
-            );
+    toggleDropdown = () => {
+        this.setState(state => ({
+            dropdownVisible: !state.dropdownVisible
+        }));
+    };
+
+    saveMenuRef = (element) => {
+        this.element = element;
+    };
+
+    saveMoreLinkRef = (element) => {
+        this.moreLink = element;
+    };
+
+    addItemRef = (element) => {
+        // `element` может быть `null`
+        // https://reactjs.org/docs/refs-and-the-dom.html#caveats
+        if (element) {
+            // Если забиндить id в `props.addItemRef`, ссылка на функцию
+            // будет каждый раз меняться. Поэтому прокидываем через атрибуты.
+            const id = element.getAttribute('data-menu-item-id');
+            this.itemRefs[id] = element;
         }
+    };
+
+    removeItemRef = (id) => {
+        this.itemRefs[id] = null;
+    };
+
+    render() {
+        const { items } = this.props;
+        const { visibleItemsCount, dropdownRightPosition, dropdownVisible } = this.state;
+        const hasDropdown = (visibleItemsCount < this.props.items.length);
 
         return (
-            <div className='menu' ref={el => this.element = el}>
+            <React.Fragment>
+                <div className='menu' ref={this.saveMenuRef}>
+                    {
+                        items.map((item, index) => (
+                            <MenuItem
+                                key={item.id}
+                                id={item.id}
+                                link={item.link}
+                                hidden={index >= visibleItemsCount}
+                                addItemRef={this.addItemRef}
+                                removeItemRef={this.removeItemRef}
+                            >{item.text}</MenuItem>
+                        ))
+                    }
+                    {
+                        <MenuItem
+                            key='_more'
+                            id='_more'
+                            hidden={!hasDropdown}
+                            active={dropdownVisible}
+                            addItemRef={this.saveMoreLinkRef}
+                            onClick={this.toggleDropdown}
+                        >Ещё…</MenuItem>
+                    }
+                </div>
                 {
-                    menu.slice(0, menu.length - dropdownItemsCount).map((menuItem, index) => (
-                        <div
-                            className='menu__item'
-                            key={index}
-                            ref={`menu__${index}`}
-                        >
-                            <SomeLink link={menuItem.link}>
-                                {menuItem.text}
-                            </SomeLink>
-                        </div>
-                    ))
-                }
-                {
-                    dropdownItemsCount !== 0 && <button onClick={() => this.setState({dropdown: !dropdown})}>Show menu</button>
-                }
-                {
-                    dropdown &&
+                    hasDropdown &&
+                    dropdownVisible &&
                     <Dropdown
-                        element={this.element}
-                        onClose={() => this.setState({dropdown: !this.state.dropdown})}>
-                        {
-                            menu.slice(menu.length - dropdownItemsCount, menu.length).map((menuItem, index) => (
-                                <SomeLink link={menuItem.link} key={index}>
-                                    {menuItem.text}
-                                </SomeLink>
-                            ))
-                        }
-                    </Dropdown>
+                        items={items.slice(visibleItemsCount)}
+                        rightPosition={dropdownRightPosition}
+                        onClose={this.hideDropdown}
+                    />
                 }
-            </div>
+            </React.Fragment>
         );
     }
 }
 
-ReactDOM.render(
-    <Menu menu={{items: [
-        {
-            link: '#a',
-            text: 'Первая ссылка',
-            id: 'first'
-        },
-        {
-            link: '#ab',
-            text: 'Вторая ссылка',
-            id: 'second'
-        },
-        {
-            link: '#abc',
-            text: 'Третья ссылка',
-            id: 'third'
-        },
-        {
-            link: '#contacts',
-            text: 'Контакты',
-            id: 'contacts'
-        },
-    ]}}>
-    </Menu>,
-    document.getElementById('root')
-);
+const initialItems = [
+    {
+        link: '#a',
+        text: 'Первая ссылка',
+        id: 'first'
+    },
+    {
+        link: '#ab',
+        text: 'Вторая ссылка',
+        id: 'second'
+    },
+    {
+        link: '#abc',
+        text: 'Третья ссылка',
+        id: 'third'
+    },
+    {
+        link: '#contacts',
+        text: 'Контакты',
+        id: 'contacts'
+    },
+];
+
+class App extends PureComponent {
+    state = {
+        items: initialItems
+    };
+
+    constructor(props, context) {
+        super(props, context);
+
+        window.setTimeout(() => {
+            const newItems = initialItems.concat({
+                link: '#ee',
+                text: 'И ещё ссылка',
+                id: 'last'
+            });
+            newItems[2] = {
+                link: '#abcd',
+                text: 'Третья ссылка новая',
+                id: 'third_new'
+            };
+            this.setState({
+                items: newItems
+            });
+        }, 5000);
+    }
+
+    render() {
+        return (
+            <Menu items={this.state.items}/>
+        )
+    }
+}
+
+ReactDOM.render(<App/>, document.getElementById('root'));
