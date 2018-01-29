@@ -21,7 +21,7 @@ class Dropdown extends PureComponent {
                     items.map((menuItem) => (
                         <DropdownItem
                             key={menuItem.id}
-                            item={menuItem}
+                            link={menuItem.link}
                         >
                             {menuItem.text}
                         </DropdownItem>
@@ -79,14 +79,14 @@ class MenuItem extends Component {
     }
 }
 
-function DropdownItem(props) {
+function DropdownItem({ link, children }) {
     return (
         <div className="menu-item menu-item_wide">
             <SomeLink
-                link={props.item.link}
+                link={link}
                 className='menu-item__link'
             >
-                {props.item.text}
+                {children}
             </SomeLink>
         </div>
     )
