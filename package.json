@@ -1,6 +1,7 @@
 {
   "name": "react-menu",
   "version": "0.1.0",
+  "homepage": "https://ipetropolsky.github.io/react-menu",
   "private": true,
   "dependencies": {
     "react": "^16.2.0",
@@ -8,11 +9,14 @@
   },
   "devDependencies": {
     "@hh.ru/eslint-config": "^3.0.1",
+    "gh-pages": "^1.1.0",
     "react-scripts": "1.1.0"
   },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d build"
   }
 }
